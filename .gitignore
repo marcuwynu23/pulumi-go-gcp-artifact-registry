@@ -1,0 +1,26 @@
+# Pulumi
+**/bin/
+*.pulumi/
+pulumi.stack.json
+pulumi.state.json
+
+# Go
+bin/
+vendor/
+*.exe
+*.test
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+Pulumi.dev.yaml
+.secrets
+!.secrets.example
