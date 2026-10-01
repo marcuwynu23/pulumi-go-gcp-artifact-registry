@@ -1,0 +1,7 @@
+config:
+  gcp:project: your-project-id
+  gcp:region: us-central1
+  artifactRegistry:repositoryId: docker-repo
+  artifactRegistry:description: Docker repository for storing container images
+  artifactRegistry:readerMembers: ""
+  artifactRegistry:writerMembers: ""

@@ -1,0 +1,22 @@
+name: pulumi-go-gcp-artifact-registry
+description: A Pulumi Go project for Google Cloud Artifact Registry
+runtime: go
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: gcp-go
+  gcp:region:
+    description: The GCP region for the repository
+    value: us-central1
+  artifactRegistry:repositoryId:
+    description: The base ID of the repository
+    value: docker-repo
+  artifactRegistry:description:
+    description: Description of the repository
+    value: Docker repository for storing container images
+  artifactRegistry:readerMembers:
+    description: Comma-separated list of members with read access
+    value: ''
+  artifactRegistry:writerMembers:
+    description: Comma-separated list of members with write access
+    value: ''
