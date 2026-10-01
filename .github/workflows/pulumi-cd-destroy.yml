@@ -1,0 +1,116 @@
+name: CD - Pulumi GCP Artifact Registry (Destroy)
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: GCP project ID
+        required: true
+        type: string
+      region:
+        description: "GCP region (Free Tier: us-central1, us-east1, us-west1)"
+        required: true
+        type: string
+        default: us-central1
+      repository_id:
+        description: Base repository ID
+        required: true
+        type: string
+        default: docker-repo
+      description:
+        description: Repository description
+        required: true
+        type: string
+        default: Docker repository for storing container images
+      reader_members:
+        description: Comma-separated members for reader role
+        required: false
+        type: string
+        default: ""
+      writer_members:
+        description: Comma-separated members for writer role
+        required: false
+        type: string
+        default: ""
+      backend_type:
+        description: State backend (local, gcs, pulumi)
+        required: true
+        type: string
+        default: local
+      gcs_state_bucket:
+        description: GCS bucket for state (if backend_type=gcs)
+        required: false
+        type: string
+        default: ""
+
+env:
+  PULUMI_STACK: artifact-registry-${{ github.event.inputs.region }}
+  PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+  GCP_PROJECT: ${{ github.event.inputs.project_id }}
+  GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+
+jobs:
+  destroy:
+    name: Pulumi Destroy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+        with:
+          command: version
+
+      - name: Configure Pulumi Backend
+        run: |
+          if [ "${{ github.event.inputs.backend_type }}" = "local" ]; then
+            pulumi login --local
+            echo "Using local filesystem backend"
+          elif [ "${{ github.event.inputs.backend_type }}" = "gcs" ]; then
+            if [ -z "${{ github.event.inputs.gcs_state_bucket }}" ]; then
+              echo "ERROR: gcs_state_bucket required for gcs backend"
+              exit 1
+            fi
+            pulumi login gs://${{ github.event.inputs.gcs_state_bucket }}
+            echo "Using GCS backend: gs://${{ github.event.inputs.gcs_state_bucket }}"
+          else
+            if [ -z "${{ secrets.PULUMI_ACCESS_TOKEN }}" ]; then
+              echo "ERROR: PULUMI_ACCESS_TOKEN required for Pulumi Cloud backend"
+              exit 1
+            fi
+            pulumi login --cloud-url https://api.pulumi.com
+            echo "Using Pulumi Cloud backend"
+          fi
+
+      - name: Configure Pulumi Stack
+        run: |
+          pulumi stack select ${{ env.PULUMI_STACK }} 2>/dev/null || echo "Stack not found"
+
+      - name: Set Pulumi Config
+        run: |
+          pulumi config set gcp:project ${{ github.event.inputs.project_id }}
+          pulumi config set gcp:region ${{ github.event.inputs.region }}
+          pulumi config set artifactRegistry:repositoryId ${{ github.event.inputs.repository_id }}
+          pulumi config set artifactRegistry:description "${{ github.event.inputs.description }}"
+          pulumi config set artifactRegistry:readerMembers "${{ github.event.inputs.reader_members }}"
+          pulumi config set artifactRegistry:writerMembers "${{ github.event.inputs.writer_members }}"
+
+      - name: Download Go Dependencies
+        run: go mod download
+
+      - name: Go Build
+        run: go build -v .
+
+      - name: Pulumi Preview (Destroy)
+        run: |
+          pulumi preview --stack ${{ env.PULUMI_STACK }} --destroy --yes
+
+      - name: Pulumi Destroy
+        run: |
+          pulumi destroy --stack ${{ env.PULUMI_STACK }} --yes

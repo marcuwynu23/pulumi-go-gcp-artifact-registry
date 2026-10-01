@@ -1,0 +1,55 @@
+name: CI - Pulumi Validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate Pulumi Go Project
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+        with:
+          command: version
+
+      - name: Configure Pulumi Local Backend
+        run: |
+          pulumi login --local
+
+      - name: Download Go Dependencies
+        run: go mod download
+
+      - name: Go Build
+        run: go build -v .
+
+      - name: Go Vet
+        run: go vet ./...
+
+      - name: Pulumi Preview (PR Stack)
+        if: github.event_name == 'pull_request'
+        env:
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+        run: |
+          if [ -z "$GCP_PROJECT" ] || [ -z "$GOOGLE_CREDENTIALS" ]; then
+            echo "GCP secrets not configured; skipping preview"
+            exit 0
+          fi
+          STACK_NAME="pr-${{ github.event.number }}"
+          pulumi stack select $STACK_NAME --create 2>/dev/null || pulumi stack init $STACK_NAME
+          pulumi config set gcp:project "$GCP_PROJECT"
+          pulumi preview --stack "$STACK_NAME" --yes
